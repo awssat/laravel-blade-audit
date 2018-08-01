@@ -8,7 +8,7 @@
 
 
 ## Introduction
-Laravel's console command to print extensive information about any blade view in laravel's project.
+Laravel's artisan command to show extensive information about any blade view in laravel's project.
 
 
 ## Features
@@ -22,7 +22,7 @@ Laravel's console command to print extensive information about any blade view in
 
 Via Composer
 ``` bash
-composer require awssat/laravel-blade-audit
+composer require awssat/laravel-blade-audit --dev
 ```
 
 ### Before Laravel 5.5
