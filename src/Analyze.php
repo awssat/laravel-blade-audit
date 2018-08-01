@@ -190,7 +190,7 @@ class Analyze
 
     protected function isBlockDirective($name)
     {
-        return Str::contains($this->compiler->compileString('@'.$name), [' if', ' for', ' foreach', ' else']);
+        return Str::contains($this->compiler->compileString('@'.$name), [' if', ' for', ' foreach', ' else', '->startSection', '->startComponent', ' while']);
     }
 
     /**
