@@ -1,7 +1,7 @@
 { 
     "name": "awssat/laravel-blade-audit",
     "type": "library",
-    "description": "Clear previously set statements in Laravel query builder",
+    "description": "Extensive information about any blade view in laravel's project.",
     "keywords": ["laravel", "blade", "audit", "analysis", "check", "view"],
     "license": "MIT",
     "homepage": "https://github.com/awssat/laravel-blade-audit",
