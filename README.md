@@ -34,6 +34,18 @@ You'll need to manually register `Awssat\BladeAudit\BladeAuditServiceProvider::c
 php artisan blade:audit view.name
 ```
 
+All views:
+```console
+php artisan blade:audit
+```
+
+## Output Example
+#### All Views Audit
+![output example](https://i.imgur.com/cwPtlfw.jpg)
+
+#### One view audit shows same as all views and extra more information
+![output example2](https://i.imgur.com/JSM8UT4.jpg)
+
 
 
 ## License
