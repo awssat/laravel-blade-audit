@@ -3,21 +3,30 @@
 namespace Awssat\BladeAudit\Commands;
 
 
+use Illuminate\Support\Str;
 use Awssat\BladeAudit\Analyze;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
+use Illuminate\Filesystem\Filesystem;
 use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Helper\TableCell;
 
 class BladeAudit extends Command
 {
-    protected $signature = 'blade:audit {view : view name}';
+    protected $signature = 'blade:audit {view? : view name}';
 
     protected $description = 'Extensive information of a blade view';
 
-    public function __construct()
+    /** @var \Illuminate\Filesystem\Filesystem */
+    protected $filesystem;
+
+    protected $allViewsResult;
+
+    public function __construct(Filesystem $filesystem)
     {
         parent::__construct();
+
+        $this->filesystem = $filesystem;
     }
 
     /**
@@ -29,58 +38,64 @@ class BladeAudit extends Command
     {
         $view = $this->argument('view');
 
-        $result = Analyze::view($view);
+        $allViews = empty($view);
 
-        if (! $result) {
-            $this->error('view ['.$view.'] not found!');
-
-            return;
+        if ($allViews) {
+            $views = $this->getAllViews();
+            $this->allViewsResult = Collection::make();
+        } else {
+            $views = Collection::wrap($view);
         }
 
-        $this->viewInfoTable($result->getViewInfo());
-        $this->output->newLine();
+        $views->each(function ($view) use ($allViews) {
+            $result = Analyze::view($view);
 
-        $this->directivesInfoTable($result->getDirectivesInfo());
-        $this->output->newLine();
+            if (! $result) {
+                $this->error('view ['.$view.'] not found!');
 
-        $this->nestingTable($result->getNestedLevels());
-        $this->output->newLine();
+                return;
+            }
 
-        $this->warningsTable($result->getWarnings());
+            if (! $allViews) {
+                $this->outputOneView($result);
+            } else {
+                $this->allViewsResult->push([$result, $view]);
+            }
+        });
+
+        if ($allViews) {
+            $this->outputAllViews();
+        }
     }
 
-    protected function viewInfoTable(Collection $viewInfo)
+    protected function outputOneView($result)
     {
-        return (new Table($this->output))
+        (new Table($this->output))
             ->setHeaders([
-                [new TableCell('View Information', ['colspan' => 2])],
+                    [new TableCell('View Information', ['colspan' => 2])],
             ])
-            ->setRows(
-                    $viewInfo->toArray()
-                )
+            ->setRows($result->getViewInfo()->toArray())
             ->render();
-    }
 
-    protected function directivesInfoTable(Collection $directivesInfo)
-    {
-        return (new Table($this->output))
+        $this->output->newLine();
+
+        (new Table($this->output))
             ->setHeaders([
                 [new TableCell('Directives Information', ['colspan' => 3])],
                 ['Directive', 'Repetition', 'Type']
             ])
             ->setRows(
-                    $directivesInfo->map(function ($item) {
+                    $result->getDirectivesInfo()->map(function ($item) {
                         $item[2] = '<fg='.($item[2] != 'custom' ? 'blue' : 'yellow').'>'.$item[2].'</>';
 
                         return $item;
                     })->toArray()
                 )
             ->render();
-    }
 
-    protected function nestingTable(Collection $nestedLevels)
-    {
-        $lastLevel = $nestedLevels->max(1);
+        $this->output->newLine();
+
+        $lastLevel = $result->getNestedLevels()->max(1);
 
         (new Table($this->output))
             ->setHeaders([
@@ -88,7 +103,7 @@ class BladeAudit extends Command
                 range(1, $lastLevel + 1),
             ])
             ->setRows(
-                    $nestedLevels->map(function ($item) {
+                    $result->getNestedLevels()->map(function ($item) {
                         $level = $item[1];
                         $items = array_pad([], $level, ' |---');
                         $items[$level] = '<fg=blue>'.$item[0].'</>';
@@ -97,26 +112,123 @@ class BladeAudit extends Command
                     })->toArray()
                 )
         ->render();
-    }
 
-    protected function warningsTable(Collection $warnings)
-    {
-        if ($warnings->isEmpty()) {
-            return;
-        }
+        if ($result->getWarnings()->isNotEmpty()) {
+            $this->output->newLine();
 
-        return (new Table($this->output))
+            (new Table($this->output))
             ->setHeaders([
                 [new TableCell('Audit Notes', ['colspan' => 2])],
             ])
             ->setStyle('compact')
             ->setRows(
-                    $warnings->map(function ($item) {
+                    $result->getWarnings()->map(function ($item) {
                         $item[0] = '<fg=yellow>'.$item[0].':</>';
 
                         return $item;
                     })->toArray()
                 )
             ->render();
+        }
+    }
+
+    protected function outputAllViews()
+    {
+        $result = $this->allViewsResult->reduce(function ($carry, $item) {
+            [$result, $view] = $item;
+
+            if (empty($carry)) {
+                $carry = ['info' => [], 'directives' => [], 'warnings' => []];
+            }
+
+            $carry['info'] = $result->getViewInfo()->mapWithKeys(function ($item) use ($carry) {
+                return [$item[0] => isset($carry['info'][$item[0]])
+                                    ? $carry['info'][$item[0]] + $item[1] : $item[1]
+                                ];
+            });
+
+            $carry['directives'] = $result->getDirectivesInfo()->mapWithKeys(function ($item) use ($carry) {
+                $item[1] = ! empty($carry['directives'][$item[0]])
+                            ? $carry['directives'][$item[0]][1] + $item[1]
+                            : $item[1];
+
+                return [$item[0] => $item];
+            });
+
+            $carry['warnings'][$view] = $result->getWarnings();
+
+            return $carry;
+        });
+
+        (new Table($this->output))
+            ->setHeaders([
+                    [new TableCell('All Views Information', ['colspan' => 2])],
+            ])
+            ->setRows(
+                $result['info']
+                        ->map(function ($v, $k) {
+                            return [$k, $v];
+                        })
+                        ->filter(function ($v, $k) {
+                            return $k != 'Longest Line (chars)';
+                        })
+                        ->values()
+                        ->toArray()
+            )
+            ->render();
+
+        $this->output->newLine();
+
+        (new Table($this->output))
+            ->setHeaders([
+                [new TableCell('Directives Information', ['colspan' => 3])],
+                ['Directive', 'Repetition', 'Type']
+            ])
+            ->setRows(
+                    $result['directives']->map(function ($item) {
+                        $item[2] = '<fg='.($item[2] != 'custom' ? 'blue' : 'yellow').'>'.$item[2].'</>';
+
+                        return $item;
+                    })->toArray()
+                )
+            ->render();
+
+        foreach ($result['warnings'] as $view => $warnings) {
+            if ($warnings->isEmpty()) {
+                continue;
+            }
+
+            $this->output->newLine();
+
+            (new Table($this->output))
+                ->setHeaders([
+                    [new TableCell('Audit Notes: <fg=cyan>('.$view.')</>', ['colspan' => 2])],
+                ])
+                ->setStyle('compact')
+                ->setRows(
+                        $warnings->map(function ($item) {
+                            $item[0] = '<fg=yellow>'.$item[0].':</>';
+
+                            return $item;
+                        })->toArray()
+                    )
+                ->render();
+        }
+    }
+
+    /**
+     * @return Illuminate\Support\Collection
+     */
+    protected function getAllViews()
+    {
+        return Collection::wrap(
+                $this->filesystem->allFiles(resource_path('views'))
+            )->map(function ($file) {
+                return str_replace(
+                            ['/', '.blade.php'],
+                    ['.', ''],
+                            Str::after($file, resource_path('views').'/')
+                );
+            });
     }
 }

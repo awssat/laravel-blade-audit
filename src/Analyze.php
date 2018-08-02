@@ -112,11 +112,11 @@ class Analyze
         $this->viewInfo = Collection::make();
 
         //file info
-        $this->viewInfo->push(['Size', strlen($this->code).' bytes']);
+        $this->viewInfo->push(['Size (bytes)', strlen($this->code)]);
 
         $linesNumber = substr_count($this->code, "\n");
 
-        $this->viewInfo->push(['Lines',  $linesNumber.' lines']);
+        $this->viewInfo->push(['Lines',  $linesNumber]);
 
         if ($linesNumber > 300) {
             $this->warnings->push(['lines > 300', sprintf('View has %d lines, it\'s a good idea to seperate & @include codes.', $linesNumber)]);
@@ -124,7 +124,7 @@ class Analyze
 
         $lines = array_map('\\Illuminate\\Support\\Str::length', explode("\n", $this->code));
 
-        $this->viewInfo->push(['Longest Line', max($lines).' chars']);
+        $this->viewInfo->push(['Longest Line (chars)', max($lines)]);
 
         //directives number
         $directivesNumber = Collection::wrap($this->directives)
