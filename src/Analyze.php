@@ -9,6 +9,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Contracts\View\Factory;
 use Illuminate\View\Compilers\BladeCompiler;
 
+
 class Analyze
 {
     /** @var \Illuminate\View\Compilers\BladeCompiler */
@@ -18,6 +19,8 @@ class Analyze
     protected $finder;
 
     protected $code;
+
+    /** @var \Illuminate\Support\Collection */
     protected $directives;
 
     protected $viewInfo;
@@ -58,7 +61,10 @@ class Analyze
             PREG_SET_ORDER
         );
 
-        $this->directives = array_map('strtolower', array_pluck($m, 1));
+        $this->directives = Collection::wrap($m)
+            ->map(function ($v) {
+                return [$v[0], strtolower($v[1])];
+            });
 
         $this->warnings = Collection::make();
 
@@ -75,7 +81,10 @@ class Analyze
         $currentNestingLevel = 0;
         $nestedDirectives = Collection::make();
 
-        foreach ($this->directives as $directive) {
+        foreach ($this->directives as $item) {
+
+            [$code, $directive] = $item;
+
             if (Str::startsWith($directive, ['end', 'stop'])) {
                 if ($currentNestingLevel > 0) {
                     $currentNestingLevel--;
@@ -87,7 +96,7 @@ class Analyze
             } else {
                 $nestedDirectives->push([$directive, $currentNestingLevel]);
 
-                if ($this->isBlockDirective($directive)) {
+                if ($this->isBlockDirective($code)) {
                     $currentNestingLevel++;
                 }
             }
@@ -98,10 +107,10 @@ class Analyze
 
     protected function fetchDirectivesInfo()
     {
-        $this->directivesInfo = Collection::wrap(array_count_values($this->directives));
+        $this->directivesInfo = Collection::wrap(array_count_values($this->directives->pluck(1)->toArray()));
 
         $this->directivesInfo = $this->directivesInfo->map(function ($v, $k) {
-            $customDirective = ! method_exists(BladeCompiler::class, 'compile'.$k);
+            $customDirective = !method_exists(BladeCompiler::class, 'compile' . $k);
 
             return [$k, $v, $customDirective ? 'custom' : 'built-in'];
         });
@@ -116,7 +125,7 @@ class Analyze
 
         $linesNumber = substr_count($this->code, "\n");
 
-        $this->viewInfo->push(['Lines',  $linesNumber]);
+        $this->viewInfo->push(['Lines', $linesNumber]);
 
         if ($linesNumber > 300) {
             $this->warnings->push(['lines > 300', sprintf('View has %d lines, it\'s a good idea to seperate & @include codes.', $linesNumber)]);
@@ -127,15 +136,15 @@ class Analyze
         $this->viewInfo->push(['Longest Line (chars)', max($lines)]);
 
         //directives number
-        $directivesNumber = Collection::wrap($this->directives)
-                ->filter(function ($item) {
-                    return ! Str::startsWith($item, ['end', 'stop', 'else']);
-                })->count();
+        $directivesNumber = $this->directives
+            ->filter(function ($item) {
+                return !Str::startsWith($item[0], ['end', 'stop', 'else']);
+            })->count();
 
         $this->viewInfo->push(['Directives', $directivesNumber]);
 
         //html & css
-        if (class_exists(\DOMDocument::class) && ! empty($this->code)) {
+        if (class_exists(\DOMDocument::class) && !empty($this->code)) {
             $dom = new \DOMDocument();
             $dom->loadHTML($this->code, LIBXML_NOERROR | LIBXML_NONET | LIBXML_NOWARNING);
             $allElements = $dom->getElementsByTagName('*');
@@ -147,7 +156,7 @@ class Analyze
     protected function detectWarnings()
     {
         //php directive?
-        if (in_array('php', $this->directives)) {
+        if (strpos($this->code, '@php') !== false) {
             $this->warnings->push(['@php', 'Is not recommended to use php codes directly in your view.']);
         }
 
@@ -188,9 +197,13 @@ class Analyze
         }
     }
 
-    protected function isBlockDirective($name)
+    protected function isBlockDirective($code)
     {
-        return Str::contains($this->compiler->compileString('@'.$name), [' if', ' for', ' foreach', ' else', '->startSection', '->startComponent', ' while']);
+        try {
+            return Str::contains($this->compiler->compileString($code), [' if', ' for', ' foreach', ' else', '->startSection', '->startComponent', ' while']);
+        } catch (\Exception $e) {
+            return false;
+        }
     }
 
     /**
