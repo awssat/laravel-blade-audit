@@ -165,7 +165,7 @@ class BladeAudit extends Command
                     [new TableCell('All Views Information', ['colspan' => 2])],
             ])
             ->setRows(
-                $result['info']
+                Collection::wrap($result['info'])
                         ->map(function ($v, $k) {
                             return [$k, $v];
                         })
@@ -185,7 +185,7 @@ class BladeAudit extends Command
                 ['Directive', 'Repetition', 'Type']
             ])
             ->setRows(
-                    $result['directives']->map(function ($item) {
+                    Collection::wrap($result['directives'])->map(function ($item) {
                         $item[2] = '<fg='.($item[2] != 'custom' ? 'blue' : 'yellow').'>'.$item[2].'</>';
 
                         return $item;
@@ -193,7 +193,7 @@ class BladeAudit extends Command
                 )
             ->render();
 
-        foreach ($result['warnings'] as $view => $warnings) {
+        foreach ($result['warnings'] ?? [] as $view => $warnings) {
             if ($warnings->isEmpty()) {
                 continue;
             }
@@ -225,9 +225,9 @@ class BladeAudit extends Command
                 $this->filesystem->allFiles(resource_path('views'))
             )->map(function ($file) {
                 return str_replace(
-                            ['/', '.blade.php'],
-                    ['.', ''],
-                            Str::after($file, resource_path('views').'/')
+                            [DIRECTORY_SEPARATOR, '.blade.php'],
+                            ['.', ''],
+                            Str::after($file, resource_path('views') . DIRECTORY_SEPARATOR)
                 );
             });
     }
