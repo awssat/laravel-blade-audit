@@ -182,6 +182,16 @@ class Analyze
             }
         }
 
+        if (version_compare($laravelVersion, '5.7', '>=')) {
+            if (
+                preg_match('/@?{{(\s*((?!}}).?)*\s*)or\s*.+?\s*}}(\r?\n)?/s', $this->code) ||
+                preg_match('/@?{{{(\s*((?!}}}).?)*\s*)or\s*.+?\s*}}}(\r?\n)?/s', $this->code) ||
+                preg_match('/@?{\!\!(\s*((?!\!\!}).?)*\s*)or\s*.+?\s*\!\!}(\r?\n)?/s', $this->code) 
+                ) {
+                $this->warnings->push(['or_operator', 'The "or" operator has been removed in favor of ?? as in {{ $var ?? "" }}']);
+            }
+        }
+
         //execution time
         $executionStartTime = microtime(true);
         $this->compiler->compileString($this->code);
