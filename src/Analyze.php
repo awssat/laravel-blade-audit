@@ -192,6 +192,12 @@ class Analyze
             }
         }
 
+        if (version_compare($laravelVersion, '5.8.13', '>=')) {
+            if (preg_match('/\@if\s*\(\s*\$errors->has\s*\(/s', $this->code)) {
+                $this->warnings->push(['error_directive', 'You could use @error(\'..\') instead of @if($error->has(..)).']);
+            }
+        }
+
         //execution time
         $executionStartTime = microtime(true);
         $this->compiler->compileString($this->code);
