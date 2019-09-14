@@ -5,8 +5,6 @@ namespace Awssat\BladeAudit;
 use Illuminate\Support\Str;
 use Illuminate\Support\Collection;
 use Illuminate\Container\Container;
-use Illuminate\Contracts\View\View;
-use Illuminate\Contracts\View\Factory;
 use Illuminate\View\Compilers\BladeCompiler;
 
 
@@ -15,13 +13,12 @@ class Analyze
     /** @var \Illuminate\View\Compilers\BladeCompiler */
     protected $compiler;
 
-    /** @var \Illuminate\View\FileViewFinder */
-    protected $finder;
-
     protected $code;
 
     /** @var \Illuminate\Support\Collection */
     protected $directives;
+
+    protected $viewsPaths;
 
     protected $viewInfo;
     protected $nestedLevels;
@@ -33,7 +30,9 @@ class Analyze
         $app = Container::getInstance();
 
         $this->compiler = $app->make(BladeCompiler::class);
-        $this->finder = $app->make(Factory::class)->getFinder();
+        $this->viewsPaths = array_map(function($path) {
+            return realpath($path) ?: $path;
+        }, $app->config['view']['paths']);
     }
 
     /**
@@ -46,9 +45,16 @@ class Analyze
 
     public function analyze($viewName)
     {
-        try {
-            $viewPath = $this->finder->find($viewName);
-        } catch (\InvalidArgumentException $e) {
+        $viewPath = '';
+        $viewName = str_replace('.', '/', $viewName).'.blade.php';
+
+        foreach ((array) $this->viewsPaths as $path) {
+            if (file_exists($path.'/'.$viewName)) {
+                $viewPath = $path.'/'.$viewName;
+            }
+        }
+
+        if(empty($viewPath)) {
             return false;
         }
 

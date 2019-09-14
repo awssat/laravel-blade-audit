@@ -6,8 +6,9 @@ namespace Awssat\BladeAudit\Commands;
 use Illuminate\Support\Str;
 use Awssat\BladeAudit\Analyze;
 use Illuminate\Console\Command;
-use Illuminate\Support\Collection;
+use Illuminate\Contracts\Container\Container;
 use Illuminate\Filesystem\Filesystem;
+use Illuminate\Support\Collection;
 use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Helper\TableCell;
 
@@ -17,16 +18,21 @@ class BladeAudit extends Command
 
     protected $description = 'Extensive information of a blade view';
 
+    protected $viewsPaths;
     /** @var \Illuminate\Filesystem\Filesystem */
     protected $filesystem;
 
     protected $allViewsResult;
 
-    public function __construct(Filesystem $filesystem)
+    public function __construct(Container $app)
     {
         parent::__construct();
 
-        $this->filesystem = $filesystem;
+        $this->viewsPaths = array_map(function($path) {
+            return realpath($path) ?: $path;
+        }, $app->config['view']['paths']);
+
+        $this->filesystem = $app->make(Filesystem::class);
     }
 
     /**
@@ -118,7 +124,7 @@ class BladeAudit extends Command
 
             (new Table($this->output))
             ->setHeaders([
-                [new TableCell('Audit Notes', ['colspan' => 2])],
+                [new TableCell('Notes', ['colspan' => 2])],
             ])
             ->setStyle('compact')
             ->setRows(
@@ -202,7 +208,7 @@ class BladeAudit extends Command
 
             (new Table($this->output))
                 ->setHeaders([
-                    [new TableCell('Audit Notes: <fg=cyan>('.$view.')</>', ['colspan' => 2])],
+                    [new TableCell('Notes: <fg=cyan>('.$view.')</>', ['colspan' => 2])],
                 ])
                 ->setStyle('compact')
                 ->setRows(
@@ -221,14 +227,21 @@ class BladeAudit extends Command
      */
     protected function getAllViews()
     {
-        return Collection::wrap(
-                $this->filesystem->allFiles(resource_path('views'))
-            )->map(function ($file) {
-                return str_replace(
+        return Collection::wrap($this->viewsPaths)
+                ->map(function($path) { 
+                    return $this->filesystem->allFiles($path) ?? []; 
+                })
+                ->flatten()
+                ->map(function ($file) {
+                    if (Str::endsWith($file, '.blade.php')) {
+                        return str_replace(
                             [DIRECTORY_SEPARATOR, '.blade.php'],
                             ['.', ''],
                             Str::after($file, resource_path('views') . DIRECTORY_SEPARATOR)
-                );
-            });
+                        );
+                    }
+                    return null;
+            })
+            ->filter();
     }
 }
