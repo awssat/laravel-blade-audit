@@ -25,9 +25,6 @@ Via Composer
 composer require awssat/laravel-blade-audit --dev
 ```
 
-### Before Laravel 5.5
-You'll need to manually register `Awssat\BladeAudit\BladeAuditServiceProvider::class` service provider in `config/app.php`.
-
 
 ## Usage
 ```console
