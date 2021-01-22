@@ -1,4 +1,9 @@
+# No longer maintained. Please use other packages: (https://github.com/enlightn/enlightn, or https://github.com/stefanzweifel/laravel-stats)
+
+
+
 # Laravel Blade Audit
+
 
 ![laravel-blade-audit](https://i.imgur.com/i0Xj0ZL.jpg)
 
